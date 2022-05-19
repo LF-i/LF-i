@@ -1,7 +1,7 @@
 module Employment where
 
 import Base
-import MultiDay
+import Multi
 import Prelude hiding (when, and, or, until, Right)
 
 ----------------------------------------------------------------
@@ -22,7 +22,7 @@ definiteEmploymentContractIO t n lx lk k = multiWorkWeekIO n t lx (Right (Employ
     where   costOfLabour = 30 * lx * convert t (Labour lk) / convert t (Currency k)
 ---
 
---- Indefinite Employment contracts
+--- "Indefinite" Employment contracts
 indefiniteEmploymentContract :: String -> String -> Date -> Double -> Labour -> Currency -> Contract
 indefiniteEmploymentContract p1 p2 t lx lk k = definiteEmploymentContract p1 p2 t (now -.. t) lx lk k
 

@@ -10,6 +10,7 @@ import Base
 ----------------------------------------------------------------
 --- ORDER COMBINATORS
 
+-- Acquire an undefined number of contracts c
 market :: IO PortfolioIO -> ContractIO -> IO PortfolioIO
 market d c = do
     putStrLn "How many units of the underlying do you want to market (0-∞)?"
@@ -17,17 +18,21 @@ market d c = do
     let c = copyIO (string2integer n) c
     addContractIO d c
 
+-- "when" combinator for deposits
 whenP :: (Show a, Eq a, Read a) => IO Bool -> IO a -> IO a -> IO a
 whenP bool d1 d2 = condP bool d1 d2
 
+-- "anytime" combinator for deposits
 anytimeP :: (Show a, Eq a, Read a) => IO Bool -> IO a -> IO a -> IO a
 anytimeP bool d1 d2 = condP bool (orP d1 d2) d2
 
+-- "cond" combinator for deposits
 condP :: (Show a, Eq a, Read a) => IO Bool -> IO a -> IO a -> IO a -- Bool should be simulated
 condP bool c1 c2 = do
     bool <- bool
     if bool then c1 else c2
 
+-- "or" combinator for deposits
 orP :: (Show a, Eq a, Read a) => IO a -> IO a -> IO a
 orP d1 d2 = do
     putStrLn "Would you like to pursue the order (Y/N)?"

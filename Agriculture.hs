@@ -1,7 +1,7 @@
 module Agriculture where
 
 import Base
-import MultiDay
+import Multi
 import Prelude hiding (when, and, or, until, Right)
 
 ----------------------------------------------------------------
@@ -9,16 +9,16 @@ import Prelude hiding (when, and, or, until, Right)
 
 cashrentIO :: Integer -- duration in days
             -> Date -- start Date
-            -> Something -- the rented plot of land
+            -> Something -- the rented plot of Land
             -> Double -- price of Land per duration of the contract
             -> Currency -- payment Currency (payment arrives day after rent end)
             -> Crop -- crop to be Grown
             -> ContractIO
 cashrentIO n t l p k ck =   multiDayIO n t 1 (Right (Grow l ck)) 
                             `andIO` 
-                            zcbIO (t +. n) (konst p) (Currency k)
+                            giveIO (zcbIO (t +. n) (konst p) (Currency k))
 
-cashrent :: Integer -> Counterparty -> Owner -> Date -> Something -> Double -> Currency -> Crop -> Contract
+cashrent :: Integer -> Counterparty -> Holder -> Date -> Something -> Double -> Currency -> Crop -> Contract
 cashrent n farmer landowner t l p k ck =    multiDay n landowner farmer t 1 (Right (Grow l ck)) 
                                             `and` 
                                             zcb farmer landowner (t +. n) p (Currency k)
@@ -31,7 +31,7 @@ cashrent n farmer landowner t l p k ck =    multiDay n landowner farmer t 1 (Rig
 
 cropshareIO :: Integer -- duration
             -> Date -- start Date
-            -> Something -- the rented plot of land
+            -> Something -- the rented plot of Land
             -> Double -- yield share to owner
             -> IO Double -- harvest yield of crop ck at time t in Tons
             -> Crop -- Crop type (payment arrives day after duration end)
@@ -42,7 +42,7 @@ cropshareIO n t l s y ck
                             `andIO` 
                             giveIO (zcbIO (t +. n) (konst s * y) (Ton (Crop ck)))
 
-cropshare :: Integer -> Counterparty -> Owner -> Date -> Something -> Double -> Crop -> Contract
+cropshare :: Integer -> Counterparty -> Holder -> Date -> Something -> Double -> Crop -> Contract
 cropshare n farmer landowner t l s ck
     | s > 1 || s < 0    = error "Share to owner must be in the range 0-1."
     | otherwise         =   multiDay n landowner farmer t 1 (Right (Grow l ck)) 

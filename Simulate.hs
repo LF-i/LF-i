@@ -6,10 +6,12 @@ import Prelude hiding (when, and, or, until, Right)
 --------------------------------------------------------------------
 --- SIMULATE
 
+-- Sums up all amounts of contracts with currency k 
 aggregate :: Something -> Contract -> Double -- possibility of more contracts, although impossible
 aggregate k []     = 0
 aggregate k (c:cs) = if something c == k then amount c + aggregate k cs else aggregate k cs
 
+-- Executes all contracts in a portfolio
 simulate :: Portfolio -> Portfolio
 simulate d = aggregateAll d . sortByDate $ [ a | a <- contract d, owner d == holder a ] ++ give [ a | a <- contract d, owner d == counterparty a ]
     where
@@ -100,7 +102,7 @@ activateIO'' d = do
         aggregate :: Something -> TransactionIO -> Double
         aggregate k c = if something2 c == k then amount2 c else 0
 
-
+-- Remove cntract from portfolio
 removeContractIO :: IO PortfolioIO -> Int -> ContractIO -> IO PortfolioIO
 removeContractIO d n c = do
     d <- d

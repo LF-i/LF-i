@@ -1,7 +1,7 @@
 module SupplyChain where
 
 import Base
-import MultiDay
+import Multi
 import Prelude hiding (when, and, or, until, Right)
 
 ----------------------------------------------------------------
@@ -9,6 +9,8 @@ import Prelude hiding (when, and, or, until, Right)
 type Supplier = String
 type Purchaser = String
 
+-- Caps the amount of k in contracts cs to max.
+-- Simplifies the setting of a max cost/price in supply chain contracts.
 setMax :: Double -> Something -> Contract -> Contract
 setMax max k cs = cond (max > q) cs (scale (max / q) cs)
     where q = sum [ amount a | a <- cs, something a == k ]
@@ -19,6 +21,8 @@ setMaxIO max k cs = do
     let q = sum [ amount2 a | a <- cs, something2 a == k ]
     condIO (return $ max > q) (return cs) (scaleIO (konst $ max / q) (return cs))
 
+-- Scales the amount of k in contracts cs to min.
+-- Simplifies the setting of a min cost/price in supply chain contracts.
 setMin :: Double -> Something -> Contract -> Contract
 setMin min k cs = cond (min < q) cs (scale (q / min) cs)
     where q = sum [ amount a | a <- cs, something a == k ]

@@ -41,7 +41,7 @@ sumByGroup :: [(String, Double)] -> [(String, Double)]
 sumByGroup = map (foo . unzip) . groupBy (\x y -> fst x == fst y) . sort            
    where foo (names, vals) = (head names, sum vals)
 
--- IMPORTANT: to be used on Something == Ton contracts only
+-- IMPORTANT: to be used on Something == Ton X contracts only
 sumByHolderAndCrop :: Contract -> Contract
 sumByHolderAndCrop = map foo . groupBy (\x y -> holder x == holder y && counterparty x == counterparty y && (growWhat . right $ something x) == (growWhat . right $ something y))
    where 
@@ -60,32 +60,44 @@ uniq = map head . group
 
 --------------------------------------------------------------------
 --- TIME HELPER FUNCTIONS
-type Date = UTCTime
-date = lift2 UTCTime (lift dateToDay getCurrentTime) 0
-now = UTCTime (dateToDay $ unsafePerformIO getCurrentTime) 0 :: Date -- for utility purposes, to be changed to: mkDate today's date
 
-mkUTCTime :: (Integer, Int, Int)
-          -> (Int, Int, Pico)
-          -> UTCTime
+type Date = UTCTime
+
+-- Passive time
+now = UTCTime (dateToDay $ unsafePerformIO getCurrentTime) 0 :: Date
+-- for utility purposes
+-- it is suggested to use mkDate (yyyy,mm,dd) with today's date instead
+
+-- Active time
+date = lift2 UTCTime (lift dateToDay getCurrentTime) 0
+
+-- Make Date including year, month, days, hours, minutes and seconds
+mkUTCTime :: (Integer, Int, Int) -> (Int, Int, Pico) -> UTCTime
 mkUTCTime (year, mon, day) (hour, min, sec) =
   UTCTime (fromGregorian year mon day)
           (timeOfDayToTime (TimeOfDay hour min sec))
 
+-- Make Date including year, month and days only
 mkDate :: (Integer, Int, Int) -> Date
 mkDate (year,month,day) = dayToDate (fromGregorian year month day)
 
+-- Add to latest date t2 the difference between the two dates t1 and t2
 addDiffDates :: Date -> Date -> Date
 addDiffDates t1 t2 = addToDate (diffDates t1 t2) t2
 
+-- Add n days to date t
 addToDate :: Integer -> Date -> Date
-addToDate n date = dayToDate (addDays n $ dateToDay date)
+addToDate n t = dayToDate (addDays n $ dateToDay t)
 
+-- Turn day d to Date format
 dayToDate :: Day -> Date
-dayToDate day = UTCTime day 0
+dayToDate d = UTCTime d 0
 
+-- Turn date t to Day format
 dateToDay :: Date -> Day
 dateToDay t = read $ formatTime defaultTimeLocale "%Y-%m-%d" t
 
+-- Find the difference between date t1 and t2 (t1 < t2)
 diffDates :: Date -> Date -> Integer
 diffDates t1 t2 = - diffDays t1' t2'
     where t1' = dateToDay t1
@@ -94,6 +106,7 @@ diffDates t1 t2 = - diffDays t1' t2'
 
 --------------------------------------------------------------------
 --- IO MANAGEMENT
+
 lift :: (a -> b) -> IO a -> IO b
 lift f x = do
     x <- x
@@ -113,6 +126,7 @@ instance (Num a) => Num (IO a) where
     abs = lift abs
     signum = lift signum
 
+-- Allow summing up two days together
 instance Num UTCTime where
     fromInteger i = error "This is not an Integer."
     (+) a b | a >= b = addToDate (diffDays a' b') a | otherwise = addToDate (diffDays b' a') b
@@ -158,6 +172,7 @@ instance (Fractional a) => Fractional (IO a) where
 --------------------------------------------------------------------
 --- TRADEABLES, CONTRACTS and PORTFOLIOS
 
+--- Composable Data Types
 data Action =   Grow { growWhere :: Something, growWhat :: Crop }       | 
                 Raise { raiseWhere :: Something, raiseWhat :: Animal }  |
                 Own { actionSomething :: Something }                    |
@@ -195,10 +210,13 @@ data Something =    Currency { currency :: Currency }                       |
 type Location = String
 type Size = Double -- size in acres
 type Address = String
+---
 
+--- Contracts
 type Counterparty = String
 type Holder = String
 
+-- Passive transaction (itself a contract) 
 data Transaction = Transaction { 
     holder :: Holder,
     counterparty :: Counterparty,
@@ -206,17 +224,21 @@ data Transaction = Transaction {
     something :: Something,
     executionDate :: Date } deriving (Show, Eq, Read)
 
-type Contract = [Transaction]
-
+-- Active contract (itself a contract)
 data TransactionIO = TransactionIO {  
     amount2 :: Double,
     something2 :: Something,
     executionDate2 :: Date } deriving (Show, Eq, Read)
 
+-- Contracts are made by transactions
+type Contract = [Transaction]
 type ContractIO = IO [TransactionIO]
+---
 
+--- Portfolios
 type Owner = String
 
+-- Passive portfolio
 data Portfolio = Portfolio {    
     owner   :: Owner,
     eur     :: Double,
@@ -229,6 +251,7 @@ data Portfolio = Portfolio {
 
 type Portfolios = [Portfolio]
 
+-- Active portfolio
 data PortfolioIO = PortfolioIO {  
     eurIO     :: Double,
     chfIO     :: Double,
@@ -245,6 +268,7 @@ konst a = return a
 ----------------------------------------------------------------
 --- TIME BOOLEANS
 
+-- Are we at t?
 at :: Date -> Date -> Bool
 at t now = now == t
 
@@ -265,11 +289,10 @@ after t now = t < now
 afterIO :: Date -> IO Date -> IO Bool
 afterIO t now = konst t %< now
 
--- Are we between t1 and t2
+-- Are we between t1 and t2 (t1 < t2)?
 between :: Date -> Date -> Bool
 between t1 t2 = t1 <= now && now <= t2
 
--- Are we between t1 and t2
 betweenIO :: Date -> Date -> IO Bool
 betweenIO t1 t2 = (afterIO t1 date %|| atIO t1 date) %&& (beforeIO t2 date %|| atIO t2 date)
 ----------------------------------------------------------------
@@ -277,6 +300,8 @@ betweenIO t1 t2 = (afterIO t1 date %|| atIO t1 date) %&& (beforeIO t2 date %|| a
 ----------------------------------------------------------------
 --- TIME MANAGEMENT
 
+-- For adjusting execution date of transactions wrapped in a timing combinator.
+-- The function automatically recognizes the timing combinator fed to it.
 adjustDate :: (Date -> Date -> Bool) -> Date -> Date -> Contract -> String -> Contract
 adjustDate f t1 t2 c t
     | length c > 1                                             = c
@@ -303,6 +328,7 @@ adjustDate f t1 t2 c t
             after2   = after t1 (addDiffDates now t2)
             after3   = after now now
 
+-- Moves execution date of all underlying transactions to t
 changeDate :: Date -> Contract -> Contract
 changeDate _ []     = []
 changeDate t (c:cs) = Transaction { 
@@ -329,12 +355,14 @@ changeDateIO t c = do
 ----------------------------------------------------------------
 --- CORE PRIMITIVES
 
+-- Empty contract
 zero :: Contract
 zero = []
 
 zeroIO :: ContractIO
 zeroIO = return []
 
+-- Non-empty contract
 one :: String -> String -> Something -> Contract
 one counterparty holder k = Transaction holder counterparty 1 k now : []
 
@@ -343,6 +371,7 @@ oneIO k = do
     date <- date
     return $ [TransactionIO 1 k date]
 
+-- Core primitive for portfolios
 addContract :: Portfolio -> Contract -> Portfolio
 addContract d c = Portfolio { 
     owner = owner d,
@@ -371,6 +400,7 @@ addContractIO d c = do
 ----------------------------------------------------------------
 --- CORE COMBINATORS
 
+-- Inverts all transactions' rights and obligations
 give :: Contract -> Contract
 give [] = []
 give (c:cs) = Transaction { 
@@ -380,6 +410,7 @@ give (c:cs) = Transaction {
     something = something c,
     executionDate = executionDate c } : [] `and` give cs
 
+-- Inverts all transaction amounts' signs
 giveIO :: ContractIO -> ContractIO
 giveIO c = do
     c <- c
@@ -392,17 +423,20 @@ giveIO c = do
             something2 = something2 c,
             executionDate2 = executionDate2 c } : [] ++ give cs
 
+-- Joins two contracts together
 and :: Contract -> Contract -> Contract
 and c1 c2 = c1 ++ c2
 
 andIO :: ContractIO -> ContractIO -> ContractIO
 andIO c1 c2 = lift2 (++) c1 c2
 
+-- Decides for the underlying contract with the highest expected value
 or :: String -> Contract -> Contract -> Contract
 or p c1 c2
     | valueS p c1 >= valueS p c2 = c1
     | otherwise                  = c2
 
+-- Gives the option to decide between the two underlying contracts
 orIO :: ContractIO -> ContractIO -> ContractIO
 orIO c1 c2 = do
     putStrLn "Do you want to acquire contract A or contract B (A/B)?"
@@ -411,7 +445,7 @@ orIO c1 c2 = do
 
 --- Timing Combinators
 when :: (Date -> Date -> Bool) -> Date -> Date -> Contract -> Contract
-when f t1 t2 cs = adjustDate f t1 t2 cs "not deferred"
+when f t1 t2 cs = adjustDate f t1 t2 cs "not deferred" -- non-deferred specifies the date accounting method
 
 whenIO :: IO Bool -> ContractIO -> ContractIO
 whenIO bool c = condIO bool c zeroIO
@@ -419,12 +453,13 @@ whenIO bool c = condIO bool c zeroIO
 anytime :: String -> (Date -> Date -> Bool) -> Date -> Date -> Contract -> Contract
 anytime _ _  _  _ [] = []
 anytime p f t1 t2 cs = or p c zero
-    where c = adjustDate f t1 t2 cs "deferred"
+    where c = adjustDate f t1 t2 cs "deferred" -- deferred specifies the date accounting method
 
 anytimeIO :: IO Bool -> ContractIO -> ContractIO
 anytimeIO bool cs = condIO bool (orIO cs zeroIO) zeroIO
 ---
 
+-- Scales all transaction amounts by x
 scale :: Double -> Contract -> Contract
 scale _ []     = []
 scale x (c:cs) = Transaction { 
@@ -445,7 +480,7 @@ scaleIO x cs = do
         something2 = something2 c,
         executionDate2 = executionDate2 c } ]) `andIO` condIO (return $ length cs /= 0) (scaleIO (konst x) (return cs)) zeroIO
 
-cond :: Bool -> Contract -> Contract -> Contract -- Bool should be simulated
+cond :: Bool -> Contract -> Contract -> Contract
 cond bool c1 c2 = if bool then c1 else c2
 
 condIO :: IO Bool -> ContractIO -> ContractIO -> ContractIO
@@ -488,21 +523,21 @@ americanIO t1 t2 c = anytimeIO (betweenIO t1 t2) c
 ----------------------------------------------------------------
 --- VALUE MANAGEMENT
 
-valueMultipleNP :: Contract -> Double
-valueMultipleNP [] = 0
-valueMultipleNP (c:cs) = value c + valueMultipleNP cs
-
+-- Calculates the value of single countract, indifferent on the party
 value :: Transaction -> Double
 value c = (amount c) * (convert (executionDate c) (something c)) / (1.0001 ** (fromInteger $ diffDates now $ executionDate c))
 
-expectedLoss = 0.05 -- 3000
+-- Defines the expected harvest loss for agricultural contracts contracts
+expectedLoss :: Double
+expectedLoss = 0.05
 
+-- Values contracts c from the perspective of party p
 valueS :: String -> Contract -> Double
-valueS p cs =   sum [ value a | a <- cs, holder a == p, (check2 $ something a) /= True ] - 
-                sum [ value a | a <- cs, counterparty a == p, (check2 $ something a) /= True ] -
-                sum [ (1 - expectedLoss) * value a | a <- cs, counterparty a == p, (check2 $ something a) == True ] +
-                sum [ (1 - expectedLoss) * value a | a <- cs, holder a == p, (check2 $ something a) == True ] +
-                (harvestRevenue $ sumByHolderAndCrop [ a | a <- cs, holder a == p, (check1 $ something a) == True ])
+valueS p c =   sum [ value a | a <- c, holder a == p, (check2 $ something a) /= True ] - 
+                sum [ value a | a <- c, counterparty a == p, (check2 $ something a) /= True ] -
+                sum [ (1 - expectedLoss) * value a | a <- c, counterparty a == p, (check2 $ something a) == True ] +
+                sum [ (1 - expectedLoss) * value a | a <- c, holder a == p, (check2 $ something a) == True ] +
+                (harvestRevenue $ sumByHolderAndCrop [ a | a <- c, holder a == p, (check1 $ something a) == True ])
                     where
                         check1 :: Something -> Bool
                         check1 (Right (Grow _ _)) = True
@@ -519,22 +554,8 @@ valueS p cs =   sum [ value a | a <- cs, holder a == p, (check2 $ something a) /
                                 p = convert (executionDate c) (Ton $ Crop tck) -- expected Crop price per Ton
                                 tck = growWhat . right $ something c -- grown Crop
                                 l = expectedLoss
-                                -- exp = cropQuantity -- * 0.5 -- measurement cost: $0.5/Crop
 
-harvestRevenue :: Contract -> Double
-harvestRevenue c = harvestRevenue' c
-    where
-        harvestRevenue' :: [Transaction] -> Double
-        harvestRevenue' [] = 0
-        harvestRevenue' (c:cs) = ((sYPA * q * (1 - l) * p) / dr) + harvestRevenue' cs
-            where
-                q = landSize . growWhere . right $ something c
-                dr = 1.0001 ** (fromInteger . diffDates now . addToDate 1 $ executionDate c)
-                sYPA = ypha tck -- average yield per harvested acre
-                p = convert (executionDate c) (Ton $ Crop tck) -- expected Crop price per Ton
-                tck = growWhat . right $ something c -- grown Crop
-                l = expectedLoss
-
+-- Calculates the value of contract c from the perspective of all its parties
 valueM :: Contract -> [(String,Double)]
 valueM c =   valueM' [] $ 
                     [ a | a <- c, (check $ something a) == False ] 
@@ -553,8 +574,13 @@ valueM c =   valueM' [] $
                         valueCounterparty :: Transaction -> Double
                         valueCounterparty c = valueS (counterparty c) [c]
 
--- Get value of Something at timepoint Date
--- NB: constant value over time in the example
+-- Calculates the expected value of all contracts of all parties (no party, NP)
+valueMultipleNP :: Contract -> Double
+valueMultipleNP [] = 0
+valueMultipleNP (c:cs) = value c + valueMultipleNP cs
+
+-- Gets value of Something at timepoint Date
+-- NB: this example is indifferent of time
 convert :: Date -> Something -> Double
 convert _ (Currency USD) = 1
 convert _ (Currency EUR) = 1.2
@@ -580,6 +606,9 @@ convert _ (Labour JuniorConsultant) = 50
 convert _ (Labour SeniorConsultant) = 100
 convert _ _ = 0
 
+convertIO :: Something -> IO Double
+convertIO k = lift2 convert date (return k)
+
 -- Seasonal Yield Per Harvested Acre
 ypha :: Crop -> Double
 ypha ck
@@ -589,26 +618,26 @@ ypha ck
     | ck == Barley = 1.24
     | ck == Corn = 4.14
     | otherwise = error $ show ck ++ " is not a crop."
-
-
-convertIO :: Something -> IO Double
-convertIO k = lift2 convert date (return k)
 ----------------------------------------------------------------
 
 ----------------------------------------------------------------
 --- UTILITY FUNCTIONS FOR CONTRACTS
 
--- Extend contract
-extend :: Double -- how much should the payment increase?
-       -> Date -- to what date should the execution be delayed?
-       -> Contract -> Contract
+-- Extends contract to date t and scales all underlings' transaction amounts of x
+extend :: Double -> Date -> Contract -> Contract
 extend x t c = scale x $ changeDate t c
 
--- Renew contract
+extendIO :: Double -> Date -> ContractIO -> ContractIO
+extendIO x t c = scaleIO (konst x) $ changeDateIO (return t) c
+
+-- Renews contract, the execution date of the new one being at t
 renew :: Date -> Contract -> Contract
 renew t c = c `and` changeDate t c
 
--- Make n copies of contract
+renewIO :: Date -> ContractIO -> ContractIO
+renewIO t c = c `andIO` changeDateIO (return t) c
+
+-- Makes n copies of contract
 copy :: Integer -> Contract -> Contract
 copy 0 c = []
 copy n c = c `and` copy (n-1) c
