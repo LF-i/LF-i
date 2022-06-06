@@ -64,7 +64,9 @@ uniq = map head . group
 type Date = UTCTime
 
 -- Passive time
-now = UTCTime (dateToDay $ unsafePerformIO getCurrentTime) 0 :: Date
+-- now = UTCTime (dateToDay $ unsafePerformIO getCurrentTime) 0 :: Date
+now = mkDate (2022,01,01)
+
 -- for utility purposes
 -- it is suggested to use mkDate (yyyy,mm,dd) with today's date instead
 
@@ -173,14 +175,18 @@ instance (Fractional a) => Fractional (IO a) where
 --- TRADEABLES, CONTRACTS and PORTFOLIOS
 
 --- Composable Data Types
+
+-- Core combinators
 data Action =   Grow { growWhere :: Something, growWhat :: Crop }       | 
                 Raise { raiseWhere :: Something, raiseWhat :: Animal }  |
-                Own { actionSomething :: Something }                    |
+             -- Own { actionSomething :: Something }                    |
                 Employ { employLabour :: Something }                    |
                 Build { buildSomething :: Something }                   |
                 Develop { developSomething :: Something }
                 deriving (Eq, Read, Show)
+--
 
+-- Core primitives
 data Currency = CHF | EUR | GBP | USD deriving (Eq, Read, Show)
 currencies = [CHF,EUR,GBP,USD]
 
@@ -193,6 +199,14 @@ data Labour = Worker | JuniorLawyer | SeniorLawyer | JuniorConsultant | SeniorC
 
 data Material = Pipe | Wood deriving (Eq, Read, Show)
 
+type Location = String
+
+type Size = Double -- size in acres
+
+type Address = String
+
+-- "Something" is a core primitive. 
+-- Nonetheless, the function it defines (e.g. currency :: Something -> Currency, crop :: Something -> Crop) are core combinators.
 data Something =    Currency { currency :: Currency }                       | 
                     Crop { crop :: Crop }                                   |
                     Good                                                    |
@@ -206,10 +220,6 @@ data Something =    Currency { currency :: Currency }                       |
                     House { houseLocation :: Location }                     |
                     Website { websiteAddress :: Address }
                     deriving (Eq, Read, Show)
-
-type Location = String
-type Size = Double -- size in acres
-type Address = String
 ---
 
 --- Contracts

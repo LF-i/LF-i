@@ -44,7 +44,7 @@ simulate d = aggregateAll d . sortByDate $ [ a | a <- contract d, owner d == hol
         aggregate :: Something -> Transaction -> Double
         aggregate k c = if something c == k then amount c else 0
 
-
+-- Add contract to portfolio and "apply" it to the latter (activate porfolio).
 addAndActivateIO :: IO PortfolioIO -> ContractIO -> IO PortfolioIO
 addAndActivateIO d cs = do
     d <- d
@@ -73,9 +73,9 @@ addAndActivateIO d cs = do
         aggregate :: Something -> TransactionIO -> Double
         aggregate k c = if something2 c == k then amount2 c else 0
 
-
-activateIO'' :: IO PortfolioIO -> IO PortfolioIO
-activateIO'' d = do
+-- Activate porfolio: the contracts will be executed/applied to the Portfolio
+activateIO :: IO PortfolioIO -> IO PortfolioIO
+activateIO d = do
     d <- d
     let cs = contractIO d
     return $ fromToIO' d cs
